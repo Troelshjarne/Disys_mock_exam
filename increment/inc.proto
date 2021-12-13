@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package mockPackage;
+option go_package = "https://github.com/Troelshjarne/Disys_mock_exam;mockPackage";
+
+message reply {
+  int32 counter = 1;
+}
+
+message incRequest {
+int32 inc = 1;
+}
+
+
+service Communication{
+    rpc increment(stream incRequest) returns(reply) {}
+}
