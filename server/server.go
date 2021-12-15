@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-var Mutex sync.Mutex
-var value = 0
+var valueMutex sync.Mutex
+var value int32 = -1
 
 type Server struct {
 	mockPackage.UnimplementedCommunicationServer
@@ -29,9 +29,24 @@ func main() {
 	var options []grpc.ServerOption
 	grpcServer := grpc.NewServer(options...)
 
+	mockPackage.RegisterCommunicationServer(grpcServer, &Server{})
+
 	grpcServer.Serve(list)
 }
-
 func (s *Server) Increment(requestStream mockPackage.Communication_IncrementServer) error {
 
+	request, err := requestStream.Recv()
+	if err != nil {
+		log.Printf("Request error: %v \n", err)
+	}
+
+	inc := request.Inc
+
+	valueMutex.Lock()
+	value += inc
+	valueMutex.Unlock()
+
+	requestStream.SendAndClose(&mockPackage.Reply{Counter: value})
+
+	return nil
 }
