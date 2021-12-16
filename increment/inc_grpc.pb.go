@@ -18,7 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CommunicationClient interface {
-	Increment(ctx context.Context, opts ...grpc.CallOption) (Communication_IncrementClient, error)
+	Increment(ctx context.Context, in *IncRequest, opts ...grpc.CallOption) (*Reply, error)
 }
 
 type communicationClient struct {
@@ -29,45 +29,20 @@ func NewCommunicationClient(cc grpc.ClientConnInterface) CommunicationClient {
 	return &communicationClient{cc}
 }
 
-func (c *communicationClient) Increment(ctx context.Context, opts ...grpc.CallOption) (Communication_IncrementClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Communication_ServiceDesc.Streams[0], "/mockPackage.Communication/increment", opts...)
+func (c *communicationClient) Increment(ctx context.Context, in *IncRequest, opts ...grpc.CallOption) (*Reply, error) {
+	out := new(Reply)
+	err := c.cc.Invoke(ctx, "/mockPackage.Communication/increment", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &communicationIncrementClient{stream}
-	return x, nil
-}
-
-type Communication_IncrementClient interface {
-	Send(*IncRequest) error
-	CloseAndRecv() (*Reply, error)
-	grpc.ClientStream
-}
-
-type communicationIncrementClient struct {
-	grpc.ClientStream
-}
-
-func (x *communicationIncrementClient) Send(m *IncRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *communicationIncrementClient) CloseAndRecv() (*Reply, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(Reply)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+	return out, nil
 }
 
 // CommunicationServer is the server API for Communication service.
 // All implementations must embed UnimplementedCommunicationServer
 // for forward compatibility
 type CommunicationServer interface {
-	Increment(Communication_IncrementServer) error
+	Increment(context.Context, *IncRequest) (*Reply, error)
 	mustEmbedUnimplementedCommunicationServer()
 }
 
@@ -75,8 +50,8 @@ type CommunicationServer interface {
 type UnimplementedCommunicationServer struct {
 }
 
-func (UnimplementedCommunicationServer) Increment(Communication_IncrementServer) error {
-	return status.Errorf(codes.Unimplemented, "method Increment not implemented")
+func (UnimplementedCommunicationServer) Increment(context.Context, *IncRequest) (*Reply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Increment not implemented")
 }
 func (UnimplementedCommunicationServer) mustEmbedUnimplementedCommunicationServer() {}
 
@@ -91,30 +66,22 @@ func RegisterCommunicationServer(s grpc.ServiceRegistrar, srv CommunicationServe
 	s.RegisterService(&Communication_ServiceDesc, srv)
 }
 
-func _Communication_Increment_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(CommunicationServer).Increment(&communicationIncrementServer{stream})
-}
-
-type Communication_IncrementServer interface {
-	SendAndClose(*Reply) error
-	Recv() (*IncRequest, error)
-	grpc.ServerStream
-}
-
-type communicationIncrementServer struct {
-	grpc.ServerStream
-}
-
-func (x *communicationIncrementServer) SendAndClose(m *Reply) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *communicationIncrementServer) Recv() (*IncRequest, error) {
-	m := new(IncRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _Communication_Increment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IncRequest)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(CommunicationServer).Increment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mockPackage.Communication/increment",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommunicationServer).Increment(ctx, req.(*IncRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 // Communication_ServiceDesc is the grpc.ServiceDesc for Communication service.
@@ -123,13 +90,12 @@ func (x *communicationIncrementServer) Recv() (*IncRequest, error) {
 var Communication_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "mockPackage.Communication",
 	HandlerType: (*CommunicationServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
+	Methods: []grpc.MethodDesc{
 		{
-			StreamName:    "increment",
-			Handler:       _Communication_Increment_Handler,
-			ClientStreams: true,
+			MethodName: "increment",
+			Handler:    _Communication_Increment_Handler,
 		},
 	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "increment/inc.proto",
 }

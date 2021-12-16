@@ -13,5 +13,5 @@ int32 inc = 1;
 
 
 service Communication{
-    rpc increment(stream incRequest) returns(reply) {}
+    rpc increment(incRequest) returns(reply) {}
 }
