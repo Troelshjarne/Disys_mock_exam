@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	mockPackage "github.com/Troelshjarne/Disys_mock_exam/increment"
@@ -13,6 +14,7 @@ import (
 var clients []mockPackage.CommunicationClient
 var incrementer = 1
 var ctx context.Context
+var incrementerMutex sync.Mutex
 
 func main() {
 	fmt.Println("=== Welcome to increment beta")
@@ -46,7 +48,7 @@ func main() {
 	ctx = context.Background()
 
 	for {
-		fmt.Println("im alive")
+		fmt.Println("The current Value on the Server is : ")
 		time.Sleep(time.Second * 2)
 		increment()
 		//Fix ID sent with message
@@ -67,14 +69,12 @@ func increment() {
 			continue
 		}
 
-		if err != nil {
-			log.Printf("Failure sending increment request. Got this error: %v", err)
+		if response <= ack.Counter {
+			response = ack.Counter
 		}
 
-		response = ack.Counter
-
-		fmt.Println(response)
-
 	}
+	fmt.Println(response)
+	incrementer++
 
 }
