@@ -12,6 +12,7 @@ import (
 
 var clients []mockPackage.CommunicationClient
 var incrementer = 1
+var ctx context.Context
 
 func main() {
 	fmt.Println("=== Welcome to increment beta")
@@ -42,37 +43,38 @@ func main() {
 
 	defer conn.Close()
 
-	ctx := context.Background()
+	ctx = context.Background()
 
 	for {
 		fmt.Println("im alive")
 		time.Sleep(time.Second * 2)
-		increment(ctx, client)
+		increment()
 		//Fix ID sent with message
 	}
 	//fmt.Println(client.Increment(ctx, &mockPackage.Empty{}))
 }
 
-func increment(ctx context.Context, client mockPackage.CommunicationClient) {
+func increment() {
 	fmt.Println("sending request")
+	response := int32(0)
+	for _, client := range clients {
+		request := mockPackage.IncRequest{}
+		request.Inc = int32(incrementer)
 
-	stream, err := client.Increment(ctx)
+		ack, err := client.Increment(ctx, &request)
+		if err != nil {
 
-	if err != nil {
-		log.Printf("Failure sending increment request. Got this error: %v", err)
+			continue
+		}
+
+		if err != nil {
+			log.Printf("Failure sending increment request. Got this error: %v", err)
+		}
+
+		response = ack.Counter
+
+		fmt.Println(response)
+
 	}
-
-	request := mockPackage.IncRequest{
-		Inc: int32(incrementer),
-	}
-	fmt.Println(request.Inc, "test")
-
-	stream.Send(&request)
-	incrementer++
-	acc, err := stream.CloseAndRecv()
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(acc.Counter)
 
 }

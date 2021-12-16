@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -15,7 +16,7 @@ var port = flag.String("port", ":9080", "port for server to listen on")
 var valueMutex sync.Mutex
 var value int32 = -1
 
-type Server struct {
+type server struct {
 	mockPackage.UnimplementedCommunicationServer
 }
 
@@ -30,29 +31,21 @@ func main() {
 		log.Fatalf("Failed to listen on port 9080: %v", err)
 	}
 
-	var options []grpc.ServerOption
-	grpcServer := grpc.NewServer(options...)
+	server := server{}
 
-	mockPackage.RegisterCommunicationServer(grpcServer, &Server{})
+	grpc := grpc.NewServer()
+	mockPackage.RegisterCommunicationServer(grpc, &server)
 
-	grpcServer.Serve(list)
-}
-func (s *Server) Increment(requestStream mockPackage.Communication_IncrementServer) error {
-
-	request, err := requestStream.Recv()
-	if err != nil {
-		log.Printf("Request error: %v \n", err)
+	if err := grpc.Serve(list); err != nil {
+		log.Fatalf("failed to server %v", err)
 	}
+}
 
-	fmt.Println(request.Inc)
-	fmt.Println(*port)
-	inc := request.Inc
+func (s *server) Increment(ctx context.Context, in *mockPackage.IncRequest) (*mockPackage.Reply, error) {
 
 	valueMutex.Lock()
-	value += inc
+	value += in.Inc
 	valueMutex.Unlock()
 
-	requestStream.SendAndClose(&mockPackage.Reply{Counter: value})
-
-	return nil
+	return &mockPackage.Reply{Counter: value}, nil
 }
