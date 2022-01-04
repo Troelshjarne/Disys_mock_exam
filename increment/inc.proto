@@ -5,10 +5,12 @@ option go_package = "https://github.com/Troelshjarne/Disys_mock_exam;mockPackage
 
 message reply {
   int32 counter = 1;
+  int32 time = 2;
 }
 
 message incRequest {
 int32 inc = 1;
+int32 time = 2;
 }
 
 

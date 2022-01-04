@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"sync"
 
 	mockPackage "github.com/Troelshjarne/Disys_mock_exam/increment"
 	"google.golang.org/grpc"
 )
 
+var lamTime = 0
 var port = flag.String("port", ":9080", "port for server to listen on")
 var valueMutex sync.Mutex
 var value int32 = -1
@@ -21,10 +23,17 @@ type server struct {
 }
 
 func main() {
+
+	logSetup()
+
+	replicaSetup()
+}
+
+func replicaSetup() {
 	// go run server.go -port 127.0.0.1:9081
 	//port := flag.String("port", ":9080", "port for server to listen on")
 	flag.Parse()
-	fmt.Println("=== Server starting up ===")
+	fmt.Println("=== Replica starting up ===")
 	list, err := net.Listen("tcp", *port)
 
 	if err != nil {
@@ -41,11 +50,29 @@ func main() {
 	}
 }
 
-func (s *server) Increment(ctx context.Context, in *mockPackage.IncRequest) (*mockPackage.Reply, error) {
+func logSetup() {
+	file, er := os.OpenFile("../logs.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if er != nil {
+		log.Fatal(er)
+	}
+	log.SetOutput(file)
+}
 
+func (s *server) Increment(ctx context.Context, in *mockPackage.IncRequest) (*mockPackage.Reply, error) {
+	//log.Println("recieved at lamportTime :", lamTime)
 	valueMutex.Lock()
+	ticker(int(in.Time), lamTime)
 	value += in.Inc
 	valueMutex.Unlock()
+	fmt.Println("recieved at lamportTime :", lamTime)
+	lamTime += 1
+	return &mockPackage.Reply{Counter: value, Time: int32(lamTime)}, nil
+}
 
-	return &mockPackage.Reply{Counter: value}, nil
+func ticker(in int, local int) {
+	if in > local {
+		lamTime = in + 1
+	} else {
+		lamTime++
+	}
 }

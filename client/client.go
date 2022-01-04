@@ -4,77 +4,93 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sync"
+	"os"
 	"time"
 
 	mockPackage "github.com/Troelshjarne/Disys_mock_exam/increment"
 	"google.golang.org/grpc"
 )
 
-var clients []mockPackage.CommunicationClient
+var lamTime = 0
 var incrementer = 1
 var ctx context.Context
-var incrementerMutex sync.Mutex
+var ips []string
+var connfrontend mockPackage.CommunicationClient
 
 func main() {
 	fmt.Println("=== Welcome to increment beta")
-	//var options []grpc.DialOption
-	//options = append(options, grpc.WithBlock(), grpc.WithInsecure())
-	//connect to server
-	conn, err := grpc.Dial(":9080", grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("Could not connect: %s", err)
+
+	getIps()
+	connect()
+	file, er := os.OpenFile("../logs.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if er != nil {
+		log.Fatal(er)
 	}
-
-	conn2, err := grpc.Dial(":9081", grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("Could not connect: %s", err)
-	}
-
-	conn3, err := grpc.Dial(":9082", grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("Could not connect: %s", err)
-	}
-
-	// client connection interface
-	client := mockPackage.NewCommunicationClient(conn)
-	client2 := mockPackage.NewCommunicationClient(conn2)
-	client3 := mockPackage.NewCommunicationClient(conn3)
-
-	clients = append(clients, client, client2, client3)
-
-	defer conn.Close()
+	log.SetOutput(file)
 
 	ctx = context.Background()
 
-	for {
-		fmt.Println("The current Value on the Server is : ")
-		time.Sleep(time.Second * 2)
-		increment()
-		//Fix ID sent with message
+	increment()
+
+}
+
+func getIps() {
+	// possibly read from file.
+	ips = append(ips, ":9084", ":9085")
+}
+
+// make a connection to the first available frontend
+
+// connects to one available interface
+func connect() {
+
+	for _, ip := range ips {
+		conn, err := grpc.Dial(ip, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
+		if err != nil {
+			//give error
+			continue
+		} else {
+			fmt.Println("connecting to :", ip)
+			connfrontend = mockPackage.NewCommunicationClient(conn)
+			break
+		}
+
 	}
-	//fmt.Println(client.Increment(ctx, &mockPackage.Empty{}))
 }
 
 func increment() {
-	fmt.Println("sending request")
-	response := int32(0)
-	for _, client := range clients {
-		request := mockPackage.IncRequest{}
-		request.Inc = int32(incrementer)
 
-		ack, err := client.Increment(ctx, &request)
+	//log.Println("sending request at lamportTime :", lamTime)
+	//response := int32(0)
+
+	for {
+		// increment lamport when sending request
+		lamTime++
+		x := mockPackage.IncRequest{
+			Inc:  int32(incrementer),
+			Time: int32(lamTime),
+		}
+		ack, err := connfrontend.Increment(ctx, &x)
 		if err != nil {
-
+			fmt.Println("increment request failed, connecting to new interface")
+			connect()
+			time.Sleep(time.Second * 2)
+			//increment()
 			continue
 		}
+		fmt.Println("sending request at lamportTime :", lamTime)
+		ticker(int(ack.Time), lamTime)
 
-		if response <= ack.Counter {
-			response = ack.Counter
-		}
+		fmt.Println(ack.Counter)
+		time.Sleep(time.Second * 2)
 
 	}
-	fmt.Println(response)
-	incrementer++
+}
 
+func ticker(in int, local int) {
+	if in > local {
+		lamTime = in + 1
+	} else {
+		lamTime++
+	}
 }
